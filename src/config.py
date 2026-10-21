@@ -57,6 +57,10 @@ class Settings:
     font_size: int = 84
     words_per_caption: int = 4
     zoom: float = 0.12  # how far still images zoom over their slice (0 = static)
+    caption_align: int = 2  # numpad layout: 2 = lower third, 5 = screen center
+    caption_margin_v: int = 0  # distance of bottom captions from the bottom edge (0 = a third of the height)
+    card_top: int = 380  # where the post card starts, from the top
+    card_max_height: int = 1100  # the post card grows up to this, then continues on a fresh page
 
     @classmethod
     def load(cls) -> "Settings":

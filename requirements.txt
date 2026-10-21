@@ -1,1 +1,3 @@
 piper-tts==1.8.0
+pillow==13.0.0
+yt-dlp  # only for studying reference videos

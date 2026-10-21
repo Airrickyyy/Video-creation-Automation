@@ -5,10 +5,16 @@
 The input folder needs:
     script.txt     narration text
     visuals/       images and/or video clips, used in filename order
-    sources.json   (optional) where each visual came from and its license
+    sources.json   (optional) where each visual came from and its license;
+                   a visual with "do_not_publish": true marks the video as not publishable
+    card.txt       (optional) title card shown near the top while the first sentence is read
+    post.json      (optional) show the script as a forum-style post that fills in as it's read;
+                   see src/pipeline/post_card.py for the fields
+    settings.json  (optional) per-video overrides of Settings fields, e.g. {"font_size": 110}
 """
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import shutil
@@ -17,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import ROOT, Settings
-from .pipeline import captions, narration, render, validate
+from .pipeline import captions, narration, post_card, render, validate
 
 
 def sha256(path: Path) -> str:
@@ -55,17 +61,38 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
 
     print("  captions...")
     caps = captions.chunk_captions(segments, settings.words_per_caption)
+    card_file = input_dir / "card.txt"
+    card = card_file.read_text(encoding="utf-8").strip() if card_file.exists() else None
     captions.write_ass(caps, work / "captions.ass", settings.width, settings.height,
-                       settings.font, settings.font_size)
+                       settings.font, settings.font_size, settings.caption_align,
+                       card=card, card_end=segments[0].end, margin_v=settings.caption_margin_v)
+
+    overlay = None
+    post_file = input_dir / "post.json"
+    if post_file.exists():
+        print("  post card...")
+        words = captions.chunk_captions(segments, 1)  # one caption per word = each word's start time
+        sentence_words = [[w.replace("*", "") for w in s.text.split()] for s in segments]
+        sentence_words = [[w for w in s if w] for s in sentence_words]
+        track = post_card.build_card_track(
+            json.loads(post_file.read_text(encoding="utf-8")), sentence_words,
+            [w.start for w in words], duration, input_dir, work / "card", settings.card_max_height)
+        overlay = (track, (settings.width - post_card.CARD_W) // 2 - post_card.SHADOW,
+                   settings.card_top - post_card.SHADOW)
 
     print(f"  rendering {duration:.1f}s from {len(visuals)} visuals...")
     video = work / "video.mp4"
-    render.render(visuals, slice_lens, work / "narration.wav", work / "captions.ass", duration, video, settings)
+    render.render(visuals, slice_lens, work / "narration.wav", work / "captions.ass", duration, video, settings,
+                  overlay=overlay)
 
     print("  validating...")
     result = validate.validate(video, duration, settings)
 
     sources_file = input_dir / "sources.json"
+    sources = json.loads(sources_file.read_text(encoding="utf-8")) if sources_file.exists() else None
+    # A source marked "do_not_publish" (e.g. footage with an unverified license) blocks the
+    # whole video from ever being published, even after approval.
+    blocked = [name for name, s in (sources or {}).items() if s.get("do_not_publish")]
     manifest = {
         "job_id": job_id,
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -75,7 +102,8 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
         "render_sha256": sha256(video),
         "visuals": [{"file": v.name, "seconds": round(s, 2), "sha256": sha256(v)}
                     for v, s in zip(visuals, slice_lens)],
-        "sources": json.loads(sources_file.read_text(encoding="utf-8")) if sources_file.exists() else None,
+        "sources": sources,
+        "publishable": not blocked,
         "segments": [vars(s) for s in segments],
         "validation": result,
     }
@@ -89,6 +117,8 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
 
     for name, c in result["checks"].items():
         print(f"    {'PASS' if c['ok'] else 'FAIL'}  {name}: {c['detail']}")
+    if blocked:
+        print(f"  WARNING: not publishable, sources marked do_not_publish: {', '.join(blocked)}")
     return result["passed"], dest
 
 
@@ -97,7 +127,12 @@ def main() -> int:
     parser.add_argument("input_dir", type=Path, help="folder with script.txt and visuals/")
     args = parser.parse_args()
 
-    passed, dest = make_short(args.input_dir.resolve(), Settings.load())
+    input_dir = args.input_dir.resolve()
+    settings = Settings.load()
+    overrides = input_dir / "settings.json"
+    if overrides.exists():
+        settings = dataclasses.replace(settings, **json.loads(overrides.read_text(encoding="utf-8")))
+    passed, dest = make_short(input_dir, settings)
     print(f"\n{'READY FOR REVIEW' if passed else 'FAILED VALIDATION'}: {dest / 'video.mp4'}")
     return 0 if passed else 1
 

@@ -17,10 +17,13 @@ def list_visuals(folder: Path) -> list[Path]:
 
 
 def render(visuals: list[Path], slice_lens: list[float], narration: Path, captions_file: Path,
-           duration: float, out_mp4: Path, settings: Settings) -> None:
+           duration: float, out_mp4: Path, settings: Settings,
+           overlay: tuple[Path, int, int] | None = None) -> None:
     """Show each visual for its slice length, cropped to fill 9:16.
 
     Still images get a slow centered zoom (alternating in/out) so they don't sit frozen.
+    `overlay` is an optional (concat list of transparent PNGs, x, y) drawn over the
+    background and under the captions, e.g. the growing post card.
     """
     w, h, fps = settings.width, settings.height, settings.fps
 
@@ -31,6 +34,8 @@ def render(visuals: list[Path], slice_lens: list[float], narration: Path, captio
         else:
             cmd += ["-stream_loop", "-1", "-t", f"{slice_len:.3f}", "-i", str(v)]
     cmd += ["-i", str(narration)]
+    if overlay:
+        cmd += ["-f", "concat", "-safe", "0", "-i", str(overlay[0])]
 
     filters = []
     for i, (v, slice_len) in enumerate(zip(visuals, slice_lens)):
@@ -50,9 +55,15 @@ def render(visuals: list[Path], slice_lens: list[float], narration: Path, captio
         )
     joined = "".join(f"[v{i}]" for i in range(len(visuals)))
     filters.append(f"{joined}concat=n={len(visuals)}:v=1:a=0[vcat]")
+    background = "vcat"
+    if overlay:
+        _, x, y = overlay
+        filters.append(f"[{len(visuals) + 1}:v]format=rgba[card]")
+        filters.append(f"[vcat][card]overlay=x={x}:y={y}:eof_action=repeat[vcard]")
+        background = "vcard"
     # The subtitles filter is given a bare filename (ffmpeg runs in that folder) to avoid
     # Windows drive-letter escaping problems.
-    filters.append(f"[vcat]subtitles={captions_file.name}[vout]")
+    filters.append(f"[{background}]subtitles={captions_file.name}[vout]")
 
     cmd += [
         "-filter_complex", ";".join(filters),

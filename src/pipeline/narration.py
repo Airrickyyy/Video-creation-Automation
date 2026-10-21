@@ -45,7 +45,7 @@ def synthesize(sentences: list[str], voice_path: Path, out_wav: Path, gap: float
     sample_rate = None
     t = 0.0
     for sentence in sentences:
-        chunks = list(voice.synthesize(sentence))
+        chunks = list(voice.synthesize(sentence.replace("*", "")))  # *highlight* marks are captions-only
         if not chunks:
             continue
         sample_rate = chunks[0].sample_rate

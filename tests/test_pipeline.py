@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from src.config import ROOT, Settings
-from src.pipeline.captions import ass_time, chunk_captions
+from src.pipeline.captions import HIGHLIGHT, ass_text, ass_time, chunk_captions, mark_words
 from src.pipeline.narration import Segment, split_sentences, split_shots
 
 
@@ -22,6 +22,13 @@ class TestText(unittest.TestCase):
             [["First.", "Second."], ["Third!"]],
         )
 
+    def test_highlight_marks(self):
+        self.assertEqual(
+            mark_words("sold it for *forty dollars,* then *cried*. Done"),
+            ["sold", "it", "for", "*forty*", "*dollars,*", "then", "*cried.*", "Done"],
+        )
+        self.assertEqual(ass_text("*HI*"), r"{\c" + HIGHLIGHT + r"}HI{\r}")
+
     def test_ass_time(self):
         self.assertEqual(ass_time(0), "0:00:00.00")
         self.assertEqual(ass_time(61.234), "0:01:01.23")
@@ -36,6 +43,21 @@ class TestText(unittest.TestCase):
         self.assertEqual(caps[2].start, 3.25)
         for a, b in zip(caps, caps[1:]):
             self.assertLessEqual(a.end, b.start + 1e-9)
+
+
+class TestPostCard(unittest.TestCase):
+    def test_long_text_pages_instead_of_overflowing(self):
+        from src.pipeline import post_card as pc
+
+        title = pc.Section("someone", "1h", pc.make_avatar("someone", None), ["A", "title."], pc.load_font(pc.TITLE_SIZE, True))
+        body = pc.Section("", "", title.avatar, ["word"] * 400, pc.load_font(pc.BODY_SIZE))
+        lay = pc.layout_post([title, body], max_height=600)
+        self.assertEqual(len(lay.word_page), 402)
+        self.assertGreater(max(lay.word_page), 0)
+        self.assertTrue(all(it.bottom <= 600 - pc.PAD for it in lay.items))
+        self.assertEqual(lay.word_page, sorted(lay.word_page))
+        img = pc.draw_state([title, body], lay, 402, 600)
+        self.assertEqual(img.size, (pc.CARD_W + 2 * pc.SHADOW, 600 + 2 * pc.SHADOW))
 
 
 class TestEndToEnd(unittest.TestCase):
