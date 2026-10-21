@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.config import ROOT, Settings
 from src.pipeline.captions import ass_time, chunk_captions
-from src.pipeline.narration import Segment, split_sentences
+from src.pipeline.narration import Segment, split_sentences, split_shots
 
 
 class TestText(unittest.TestCase):
@@ -14,6 +14,12 @@ class TestText(unittest.TestCase):
         self.assertEqual(
             split_sentences("One fact.  Two?\nThree!   "),
             ["One fact.", "Two?", "Three!"],
+        )
+
+    def test_split_shots_by_blank_lines(self):
+        self.assertEqual(
+            split_shots("First. Second.\n\n  \nThird!\n\n\n"),
+            [["First.", "Second."], ["Third!"]],
         )
 
     def test_ass_time(self):

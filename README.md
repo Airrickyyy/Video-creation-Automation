@@ -39,8 +39,16 @@ inputs/my-video/
 └── sources.json    optional: where each visual came from and its license
 ```
 
-Each visual is shown for an equal share of the narration and cropped to fill the vertical frame.
-Only use visuals you made yourself or have a license for (e.g. Pexels), and record them in `sources.json`.
+**Matching visuals to lines:** separate `script.txt` into paragraphs with blank lines, one
+paragraph per visual. If the paragraph count equals the number of visuals, each cut happens
+exactly when its paragraph starts being spoken. Otherwise visuals get equal shares of the time.
+Visuals are cropped to fill the vertical frame and still images slowly zoom.
+
+Only use visuals you made yourself or have a license for (e.g. NASA, Pexels), and record them in `sources.json`.
+
+**Writing a new video:** see [prompts/](prompts/README.md) for the Claude chat prompts (ideas →
+script with fact check → visuals → title/description), based on [docs/RESEARCH.md](docs/RESEARCH.md).
+`inputs/pale-blue-dot/` is a full worked example.
 
 ## Checks run on every video
 
@@ -57,7 +65,7 @@ The end-to-end test renders the sample video (about 30 seconds).
 
 ## Known limitations (Stage 1)
 
-- Images are static (no zoom/pan movement yet) and change at equal intervals.
+- Image movement is a simple centered zoom; no pans or transitions between shots.
 - No background music.
 - Caption timing is per sentence, split evenly by characters, so words can be a little off.
 - Scripts are written by hand (or with Claude in chat) and saved as `script.txt`.

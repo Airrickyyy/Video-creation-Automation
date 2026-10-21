@@ -24,6 +24,12 @@ def split_sentences(script: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
 
 
+def split_shots(script: str) -> list[list[str]]:
+    """Blank-line-separated paragraphs, each a list of sentences (one visual per paragraph)."""
+    paragraphs = re.split(r"\n\s*\n", script.strip())
+    return [s for s in (split_sentences(p) for p in paragraphs) if s]
+
+
 def synthesize(sentences: list[str], voice_path: Path, out_wav: Path, gap: float) -> list[Segment]:
     from piper import PiperVoice  # imported here so tests of other modules don't need Piper
 

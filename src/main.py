@@ -38,9 +38,20 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
     print(f"[{job_id}] working in {work}")
 
     print("  narration...")
-    sentences = narration.split_sentences(script_text)
+    shots = narration.split_shots(script_text)
+    sentences = [s for shot in shots for s in shot]
     segments = narration.synthesize(sentences, settings.piper_voice, work / "narration.wav", settings.sentence_gap)
     duration = segments[-1].end + settings.sentence_gap
+
+    if len(shots) == len(visuals):
+        # One paragraph per visual: cut exactly where each paragraph starts being spoken.
+        starts, i = [], 0
+        for shot in shots:
+            starts.append(segments[i].start)
+            i += len(shot)
+        slice_lens = [b - a for a, b in zip(starts, starts[1:] + [duration])]
+    else:
+        slice_lens = [duration / len(visuals)] * len(visuals)
 
     print("  captions...")
     caps = captions.chunk_captions(segments, settings.words_per_caption)
@@ -49,7 +60,7 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
 
     print(f"  rendering {duration:.1f}s from {len(visuals)} visuals...")
     video = work / "video.mp4"
-    render.render(visuals, work / "narration.wav", work / "captions.ass", duration, video, settings)
+    render.render(visuals, slice_lens, work / "narration.wav", work / "captions.ass", duration, video, settings)
 
     print("  validating...")
     result = validate.validate(video, duration, settings)
@@ -62,7 +73,8 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
         "script": script_text,
         "duration": round(duration, 2),
         "render_sha256": sha256(video),
-        "visuals": [{"file": v.name, "sha256": sha256(v)} for v in visuals],
+        "visuals": [{"file": v.name, "seconds": round(s, 2), "sha256": sha256(v)}
+                    for v, s in zip(visuals, slice_lens)],
         "sources": json.loads(sources_file.read_text(encoding="utf-8")) if sources_file.exists() else None,
         "segments": [vars(s) for s in segments],
         "validation": result,

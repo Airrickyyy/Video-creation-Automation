@@ -16,25 +16,37 @@ def list_visuals(folder: Path) -> list[Path]:
     return files
 
 
-def render(visuals: list[Path], narration: Path, captions_file: Path, duration: float,
-           out_mp4: Path, settings: Settings) -> None:
-    """Each visual gets an equal slice of the narration's length, cropped to fill 9:16."""
+def render(visuals: list[Path], slice_lens: list[float], narration: Path, captions_file: Path,
+           duration: float, out_mp4: Path, settings: Settings) -> None:
+    """Show each visual for its slice length, cropped to fill 9:16.
+
+    Still images get a slow centered zoom (alternating in/out) so they don't sit frozen.
+    """
     w, h, fps = settings.width, settings.height, settings.fps
-    slice_len = duration / len(visuals)
 
     cmd = [settings.ffmpeg, "-y", "-hide_banner", "-loglevel", "error"]
-    for v in visuals:
+    for v, slice_len in zip(visuals, slice_lens):
         if v.suffix.lower() in IMAGE_EXTS:
-            cmd += ["-loop", "1", "-t", f"{slice_len:.3f}", "-i", str(v)]
+            cmd += ["-i", str(v)]  # single frame; zoompan expands it to `frames`
         else:
             cmd += ["-stream_loop", "-1", "-t", f"{slice_len:.3f}", "-i", str(v)]
     cmd += ["-i", str(narration)]
 
     filters = []
-    for i in range(len(visuals)):
+    for i, (v, slice_len) in enumerate(zip(visuals, slice_lens)):
+        frames = int(slice_len * fps) + 1
+        if v.suffix.lower() in IMAGE_EXTS:
+            # Zoom on a 2x canvas so the movement is smooth instead of stepping pixel by pixel.
+            zoom = f"1+{settings.zoom}*on/{frames}" if i % 2 == 0 else f"{1 + settings.zoom}-{settings.zoom}*on/{frames}"
+            frame = (
+                f"scale={2 * w}:{2 * h}:force_original_aspect_ratio=increase,crop={2 * w}:{2 * h},"
+                f"zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={w}x{h}:fps={fps}"
+            )
+        else:
+            frame = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},fps={fps}"
         filters.append(
-            f"[{i}:v]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},"
-            f"setsar=1,fps={fps},format=yuv420p,trim=duration={slice_len:.3f},setpts=PTS-STARTPTS[v{i}]"
+            f"[{i}:v]{frame},setsar=1,format=yuv420p,"
+            f"trim=duration={slice_len:.3f},setpts=PTS-STARTPTS[v{i}]"
         )
     joined = "".join(f"[v{i}]" for i in range(len(visuals)))
     filters.append(f"{joined}concat=n={len(visuals)}:v=1:a=0[vcat]")

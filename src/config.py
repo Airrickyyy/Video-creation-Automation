@@ -56,6 +56,7 @@ class Settings:
     font: str = "Arial"
     font_size: int = 84
     words_per_caption: int = 4
+    zoom: float = 0.12  # how far still images zoom over their slice (0 = static)
 
     @classmethod
     def load(cls) -> "Settings":
@@ -71,4 +72,5 @@ class Settings:
             font=os.environ.get("CAPTION_FONT", "Arial"),
             font_size=int(os.environ.get("CAPTION_FONT_SIZE", 84)),
             words_per_caption=int(os.environ.get("WORDS_PER_CAPTION", 4)),
+            zoom=float(os.environ.get("IMAGE_ZOOM", 0.12)),
         )
