@@ -34,6 +34,21 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def find_music(setting: str, input_dir: Path, seed: str) -> Path | None:
+    """The background track: "" = none, "random" = one from music/, else a file path."""
+    if not setting:
+        return None
+    if setting == "random":
+        tracks = sorted(p for p in (ROOT / "music").glob("*") if p.suffix.lower() in {".mp3", ".wav", ".m4a", ".ogg"})
+        if not tracks:
+            raise FileNotFoundError("music is set to \"random\" but the music/ folder has no tracks")
+        return tracks[int(hashlib.md5(seed.encode()).hexdigest(), 16) % len(tracks)]
+    for base in (input_dir, ROOT):
+        if (base / setting).exists():
+            return base / setting
+    raise FileNotFoundError(f"Music file not found: {setting}")
+
+
 def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
     script_text = (input_dir / "script.txt").read_text(encoding="utf-8")
     visuals = render.list_visuals(input_dir / "visuals")
@@ -46,7 +61,9 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
     print("  narration...")
     shots = narration.split_shots(script_text)
     sentences = [s for shot in shots for s in shot]
-    segments = narration.synthesize(sentences, settings.piper_voice, work / "narration.wav", settings.sentence_gap)
+    segments = narration.synthesize(sentences, work / "narration.wav", settings.sentence_gap,
+                                    settings.speech_speed, settings.voice_engine, settings.piper_voice,
+                                    settings.kokoro_model, settings.kokoro_voice)
     duration = segments[-1].end + settings.sentence_gap
 
     if len(shots) == len(visuals):
@@ -60,12 +77,13 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
         slice_lens = [duration / len(visuals)] * len(visuals)
 
     print("  captions...")
-    caps = captions.chunk_captions(segments, settings.words_per_caption)
+    caps = captions.chunk_captions(segments, settings.words_per_caption) if settings.show_captions else []
     card_file = input_dir / "card.txt"
     card = card_file.read_text(encoding="utf-8").strip() if card_file.exists() else None
     captions.write_ass(caps, work / "captions.ass", settings.width, settings.height,
                        settings.font, settings.font_size, settings.caption_align,
-                       card=card, card_end=segments[0].end, margin_v=settings.caption_margin_v)
+                       card=card, card_end=segments[0].end, margin_v=settings.caption_margin_v,
+                       cycle_colors=settings.caption_colors)
 
     overlay = None
     post_file = input_dir / "post.json"
@@ -80,10 +98,14 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
         overlay = (track, (settings.width - post_card.CARD_W) // 2 - post_card.SHADOW,
                    settings.card_top - post_card.SHADOW)
 
+    music = find_music(settings.music, input_dir, job_id)
+    if music:
+        print(f"  music: {music.name}")
+
     print(f"  rendering {duration:.1f}s from {len(visuals)} visuals...")
     video = work / "video.mp4"
     render.render(visuals, slice_lens, work / "narration.wav", work / "captions.ass", duration, video, settings,
-                  overlay=overlay)
+                  overlay=overlay, music=music)
 
     print("  validating...")
     result = validate.validate(video, duration, settings)
@@ -102,6 +124,7 @@ def make_short(input_dir: Path, settings: Settings) -> tuple[bool, Path]:
         "render_sha256": sha256(video),
         "visuals": [{"file": v.name, "seconds": round(s, 2), "sha256": sha256(v)}
                     for v, s in zip(visuals, slice_lens)],
+        "music": str(music.relative_to(ROOT)) if music and music.is_relative_to(ROOT) else (str(music) if music else None),
         "sources": sources,
         "publishable": not blocked,
         "segments": [vars(s) for s in segments],

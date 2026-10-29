@@ -6,5 +6,11 @@
     "license": "Standard YouTube License; 'no copyright' claimed only in the title, unverified",
     "do_not_publish": true,
     "note": "LOCAL DEMO ONLY. Replace with the owner's own gameplay recording before any upload."
+  },
+  "music/carefree-kevin-macleod.mp3": {
+    "title": "Carefree",
+    "url": "https://incompetech.com/music/royalty-free/index.html?isrc=USUAN1100474",
+    "credit": "\"Carefree\" Kevin MacLeod (incompetech.com) Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/",
+    "license": "CC BY 4.0"
   }
 }

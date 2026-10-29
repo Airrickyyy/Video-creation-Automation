@@ -8,6 +8,7 @@ __pycache__/
 
 # Large / generated files
 backgrounds/
+music/
 inputs/**/*.mp4
 voices/
 data/

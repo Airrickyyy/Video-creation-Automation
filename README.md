@@ -4,6 +4,7 @@ Makes faceless vertical Shorts (1080×1920 MP4) from a script and a folder of vi
 script → Piper narration → timed captions → FFmpeg render → automatic checks → review folder.
 
 Everything runs locally and costs nothing. The full plan is in [docs/HANDOFF.md](docs/HANDOFF.md).
+**New here? Read [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md)**, a beginner-friendly guide to the whole project.
 **Current stage: 1 of 6 (local proof of concept).** Nothing uploads anywhere.
 
 ## One-time setup (Windows)

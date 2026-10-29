@@ -48,6 +48,7 @@ class Settings:
     ffmpeg: str
     ffprobe: str
     piper_voice: Path
+    kokoro_model: Path
     width: int = 1080
     height: int = 1920
     fps: int = 30
@@ -57,6 +58,13 @@ class Settings:
     font_size: int = 84
     words_per_caption: int = 4
     zoom: float = 0.12  # how far still images zoom over their slice (0 = static)
+    voice_engine: str = "piper"  # "piper" or "kokoro" (more natural)
+    kokoro_voice: str = "af_heart"  # see https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md
+    speech_speed: float = 1.0  # >1 talks faster; 1.4 ≈ the pace of popular story channels
+    music: str = ""  # background track: a file (relative to the input folder or project), or "random" for one from music/
+    music_volume_db: float = -4.0  # music level before ducking; more negative = quieter
+    show_captions: bool = True  # off when the card already shows every word (e.g. chat mode)
+    caption_colors: bool = False  # rotate each caption through white/yellow/green/pink
     caption_align: int = 2  # numpad layout: 2 = lower third, 5 = screen center
     caption_margin_v: int = 0  # distance of bottom captions from the bottom edge (0 = a third of the height)
     card_top: int = 380  # where the post card starts, from the top
@@ -68,13 +76,22 @@ class Settings:
         voice = Path(os.environ.get("PIPER_VOICE", ROOT / "voices" / "en_US-lessac-medium.onnx"))
         if not voice.is_absolute():
             voice = ROOT / voice
+        kokoro = Path(os.environ.get("KOKORO_MODEL", ROOT / "voices" / "kokoro-v1.0.int8.onnx"))
+        if not kokoro.is_absolute():
+            kokoro = ROOT / kokoro
         return cls(
             ffmpeg=find_tool("ffmpeg"),
             ffprobe=find_tool("ffprobe"),
             piper_voice=voice,
+            kokoro_model=kokoro,
+            voice_engine=os.environ.get("VOICE_ENGINE", "piper"),
+            kokoro_voice=os.environ.get("KOKORO_VOICE", "af_heart"),
             max_duration=float(os.environ.get("MAX_DURATION", 60)),
             font=os.environ.get("CAPTION_FONT", "Arial"),
             font_size=int(os.environ.get("CAPTION_FONT_SIZE", 84)),
             words_per_caption=int(os.environ.get("WORDS_PER_CAPTION", 4)),
             zoom=float(os.environ.get("IMAGE_ZOOM", 0.12)),
+            speech_speed=float(os.environ.get("SPEECH_SPEED", 1.0)),
+            music=os.environ.get("MUSIC", ""),
+            music_volume_db=float(os.environ.get("MUSIC_VOLUME_DB", -4)),
         )

@@ -18,12 +18,14 @@ def list_visuals(folder: Path) -> list[Path]:
 
 def render(visuals: list[Path], slice_lens: list[float], narration: Path, captions_file: Path,
            duration: float, out_mp4: Path, settings: Settings,
-           overlay: tuple[Path, int, int] | None = None) -> None:
+           overlay: tuple[Path, int, int] | None = None, music: Path | None = None) -> None:
     """Show each visual for its slice length, cropped to fill 9:16.
 
     Still images get a slow centered zoom (alternating in/out) so they don't sit frozen.
     `overlay` is an optional (concat list of transparent PNGs, x, y) drawn over the
     background and under the captions, e.g. the growing post card.
+    `music` is an optional track looped under the narration for the whole video: quieter
+    than the voice, dipping further while the narrator talks ("ducking"), faded in and out.
     """
     w, h, fps = settings.width, settings.height, settings.fps
 
@@ -36,6 +38,9 @@ def render(visuals: list[Path], slice_lens: list[float], narration: Path, captio
     cmd += ["-i", str(narration)]
     if overlay:
         cmd += ["-f", "concat", "-safe", "0", "-i", str(overlay[0])]
+    if music:
+        music_input = len(visuals) + (2 if overlay else 1)
+        cmd += ["-stream_loop", "-1", "-i", str(music)]
 
     filters = []
     for i, (v, slice_len) in enumerate(zip(visuals, slice_lens)):
@@ -65,9 +70,22 @@ def render(visuals: list[Path], slice_lens: list[float], narration: Path, captio
     # Windows drive-letter escaping problems.
     filters.append(f"[{background}]subtitles={captions_file.name}[vout]")
 
+    audio = f"{len(visuals)}:a"
+    if music:
+        fade_out = max(duration - 2, 0)
+        filters += [
+            f"[{len(visuals)}:a]aresample=48000,asplit=2[voice][key]",
+            f"[{music_input}:a]aresample=48000,volume={settings.music_volume_db}dB,"
+            f"afade=t=in:d=1,afade=t=out:st={fade_out:.2f}:d=2[bed]",
+            # Duck the music under the voice so the narration stays clear.
+            "[bed][key]sidechaincompress=threshold=0.03:ratio=4:attack=30:release=400[ducked]",
+            "[voice][ducked]amix=inputs=2:duration=first:normalize=0[aout]",
+        ]
+        audio = "[aout]"
+
     cmd += [
         "-filter_complex", ";".join(filters),
-        "-map", "[vout]", "-map", f"{len(visuals)}:a",
+        "-map", "[vout]", "-map", audio,
         "-t", f"{duration:.3f}",
         "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-b:a", "192k",

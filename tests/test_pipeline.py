@@ -49,15 +49,20 @@ class TestPostCard(unittest.TestCase):
     def test_long_text_pages_instead_of_overflowing(self):
         from src.pipeline import post_card as pc
 
-        title = pc.Section("someone", "1h", pc.make_avatar("someone", None), ["A", "title."], pc.load_font(pc.TITLE_SIZE, True))
-        body = pc.Section("", "", title.avatar, ["word"] * 400, pc.load_font(pc.BODY_SIZE))
-        lay = pc.layout_post([title, body], max_height=600)
+        sections = pc.make_sections({"author": "someone"}, ["A", "title."], ["word"] * 400, ROOT)
+        lay = pc.layout_post(sections, max_height=600)
         self.assertEqual(len(lay.word_page), 402)
         self.assertGreater(max(lay.word_page), 0)
-        self.assertTrue(all(it.bottom <= 600 - pc.PAD for it in lay.items))
+        # text never runs into the space reserved for the action bar
+        self.assertTrue(all(it.bottom <= 600 - pc.PAD - pc.BAR_GAP - pc.BAR_H for it in lay.items))
         self.assertEqual(lay.word_page, sorted(lay.word_page))
-        img = pc.draw_state([title, body], lay, 402, 600)
+        img = pc.draw_state(sections, lay, 402, 600)
         self.assertEqual(img.size, (pc.CARD_W + 2 * pc.SHADOW, 600 + 2 * pc.SHADOW))
+
+    def test_counts(self):
+        from src.pipeline.post_card import short_count
+
+        self.assertEqual([short_count(n) for n in (950, 1000, 12_400, 3_050)], ["950", "1k", "12.4k", "3k"])
 
 
 class TestEndToEnd(unittest.TestCase):
